@@ -1,29 +1,22 @@
-const express = require('express');
-const app = express();
-app.use(express.json());
+const WebSocket = require('ws');
+const port = process.env.PORT || 10000;
+const wss = new WebSocket.Server({ port: port });
 
-let posicoes = {};
+wss.on('connection', (ws) => {
+    console.log('Novo jogador sincronizado!');
 
-// Recebe a posição do jogador
-app.post('/api/posicao', (req, res) => {
-    const { PlayerId, X, Y, Z, Estado } = req.body;
-    
-    if (PlayerId) {
-        // Salva ou atualiza a posição do jogador
-        posicoes[PlayerId] = { PlayerId, X, Y, Z, Estado, ultimaAtualizacao: Date.now() };
-    }
-
-    // Limpa jogadores que ficaram off-line (mais de 10 segundos sem mandar sinal)
-    const agora = Date.now();
-    Object.keys(posicoes).forEach(id => {
-        if (agora - posicoes[id].ultimaAtualizacao > 10000) {
-            delete posicoes[id];
-        }
+    ws.on('message', (message) => {
+        // Recebe a ação de um jogador e espalha para todos os outros no mapa
+        wss.clients.forEach((client) => {
+            if (client !== ws && client.readyState === WebSocket.OPEN) {
+                client.send(message.toString());
+            }
+        });
     });
 
-    // Devolve a lista de todo mundo que está conectado
-    res.status(200).json(Object.values(posicoes));
+    ws.on('close', () => {
+        console.log('Jogador desconectado.');
+    });
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+console.log(`Servidor WebSocket rodando na porta ${port}`);
